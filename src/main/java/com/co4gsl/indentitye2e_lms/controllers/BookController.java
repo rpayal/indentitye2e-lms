@@ -57,7 +57,7 @@ public class BookController {
     }
 
     @PutMapping("/borrow/{isbn}")
-    public ResponseEntity<?> borrowBook(String isbn) {
+    public ResponseEntity<?> borrowBook(@PathVariable String isbn) {
         if (bookService.findBookByISBN(isbn).isEmpty()) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("Can't be borrowed as this book does not exist.");
         }
@@ -65,7 +65,7 @@ public class BookController {
     }
 
     @PutMapping("/return/{isbn}")
-    public ResponseEntity<?> returnBook(String isbn) {
+    public ResponseEntity<?> returnBook(@PathVariable String isbn) {
         if (bookService.findBookByISBN(isbn).isEmpty()) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("Can't be returned as this book does not exist.");
         }

@@ -11,15 +11,19 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
 
 @Service
 public class BookServiceImpl implements BookService {
+
+    Logger LOGGER = LoggerFactory.getLogger(BookServiceImpl.class);
+
     private final BookRepository bookRepository;
     private final BookMapper bookMapper;
-    Logger LOGGER = LoggerFactory.getLogger(BookServiceImpl.class);
 
     @Autowired
     public BookServiceImpl(BookRepository bookRepository, BookMapper bookMapper) {
@@ -28,44 +32,49 @@ public class BookServiceImpl implements BookService {
     }
 
     @Override
-    @CachePut(cacheNames = {"bookCache"}, key = "#book.isbn")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public BookDTO addBook(BookDTO book) {
         LOGGER.info("Adding book !!");
         return bookMapper.toDTO(bookRepository.save(bookMapper.toEntity(book)));
     }
 
     @Override
-    @CacheEvict(cacheNames = {"bookCache"}, key = "#isbn")
+    @Transactional
+    @CacheEvict(cacheNames = {"bookCache"}, key = "#p0")
     public void removeBook(String isbn) {
         bookRepository.deleteById(isbn);
     }
 
     @Override
-    @Cacheable(cacheNames = {"bookCache"}, key = "#isbn")
+    @Transactional
+    @Cacheable(cacheNames = {"bookCache"}, key = "#p0", unless = "#result == null")
     public Optional<BookDTO> findBookByISBN(String isbn) {
         Optional<Book> book = bookRepository.findById(isbn);
         return book.isPresent() ? Optional.of(bookMapper.toDTO(book.get())) : Optional.empty();
     }
 
     @Override
-    @Cacheable(cacheNames = {"authorBooks"}, key = "#author")
+    @Transactional
+    @Cacheable(cacheNames = {"authorBooks"}, key = "#p0")
     public List<BookDTO> findBooksByAuthor(String author) {
         return bookMapper.toDTOs(bookRepository.findByAuthor(author));
     }
 
     @Override
-    @CachePut(cacheNames = {"bookCache"}, key = "#isbn")
+    @Transactional
+    @CachePut(cacheNames = {"bookCache"}, key = "#p0")
     public BookDTO borrowBook(String isbn) {
-        Book book = bookMapper.toEntity(findBookByISBN(isbn).orElseThrow());
-        bookRepository.updateBookAvailableCopiesByIsbn(book.getAvailableCopies() - 1, book.getIsbn());
-        return bookMapper.toDTO(bookRepository.findById(isbn).get());
+        Book book = bookRepository.findById(isbn).orElseThrow();
+        book.setAvailableCopies(book.getAvailableCopies() - 1);
+        return bookMapper.toDTO(bookRepository.save(book));
     }
 
     @Override
-    @CachePut(cacheNames = {"bookCache"}, key = "#isbn")
+    @Transactional
+    @CachePut(cacheNames = {"bookCache"}, key = "#p0")
     public BookDTO returnBook(String isbn) {
-        Book book = bookMapper.toEntity(findBookByISBN(isbn).orElseThrow());
-        bookRepository.updateBookAvailableCopiesByIsbn(book.getAvailableCopies() + 1, book.getIsbn());
-        return bookMapper.toDTO(bookRepository.findById(isbn).get());
+        Book book = bookRepository.findById(isbn).orElseThrow();
+        book.setAvailableCopies(book.getAvailableCopies() + 1);
+        return bookMapper.toDTO(bookRepository.save(book));
     }
 }

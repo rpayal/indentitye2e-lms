@@ -40,7 +40,6 @@ class BookServiceImplTest {
         String newBookIsbn = "isbn101";
         BookDTO book = new BookDTO(newBookIsbn, "The Lord of the Rings", "J. R. R. Tolkien", 2020, 10);
         bookService.addBook(book);
-        assertEquals(book, getCachedBook(newBookIsbn).get());
 
         Optional<BookDTO> savedBook = bookService.findBookByISBN(newBookIsbn);
         assertEquals(book, getCachedBook(newBookIsbn).get());
@@ -57,6 +56,7 @@ class BookServiceImplTest {
 
         Optional<BookDTO> savedBook = bookService.findBookByISBN(isbn);
         assertTrue(savedBook.isEmpty());
+        assertTrue(getCachedBook(isbn).isEmpty());
     }
 
     @Test
@@ -78,7 +78,6 @@ class BookServiceImplTest {
         String isbnToBorrow = "isbn-101";
         BookDTO book = new BookDTO(isbnToBorrow, "The Lord of the Rings", "J. R. R. Tolkien", 2020, 10);
         bookService.addBook(book);
-        assertEquals(book, getCachedBook(isbnToBorrow).get());
 
         bookService.borrowBook(isbnToBorrow);
         assertEquals(9, getCachedBook(isbnToBorrow).get().getAvailableCopies());
@@ -94,7 +93,6 @@ class BookServiceImplTest {
         String isbnToReturn = "isbn-101";
         BookDTO book = new BookDTO(isbnToReturn, "The Lord of the Rings", "J. R. R. Tolkien", 2020, 10);
         bookService.addBook(book);
-        assertEquals(book, getCachedBook(isbnToReturn).get());
 
         bookService.borrowBook(isbnToReturn);
         assertEquals(9, getCachedBook(isbnToReturn).get().getAvailableCopies());
