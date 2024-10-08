@@ -3,6 +3,7 @@ package com.co4gsl.indentitye2e_lms;
 import com.co4gsl.indentitye2e_lms.controllers.BookController;
 import com.co4gsl.indentitye2e_lms.domain.Book;
 import com.co4gsl.indentitye2e_lms.dto.BookDTO;
+import com.co4gsl.indentitye2e_lms.exceptions.ErrorResponse;
 import com.co4gsl.indentitye2e_lms.repositories.BookRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -23,6 +24,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import static com.co4gsl.indentitye2e_lms.controllers.BookController.CANNT_BE_ADDED_AS_BOOK_ALREADY_EXISTS;
+import static com.co4gsl.indentitye2e_lms.controllers.BookController.CANNT_BE_BORROWED_AS_THIS_BOOK_DOES_NOT_EXIST;
+import static com.co4gsl.indentitye2e_lms.controllers.BookController.CANNT_BE_RETURNED_AS_THIS_BOOK_DOES_NOT_EXIST;
 import static java.util.Optional.ofNullable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -64,10 +68,9 @@ class LMSApplicationTests {
         BookDTO newBook = new BookDTO("isbn-101", "The Lord of the Rings", "J. R. R. Tolkien", 2020, 10);
         addBookToLibraryAndAssert(newBook);
 
-        ResponseEntity<?> response = getAddBookToLibraryResponse(newBook);
-
+        ResponseEntity<String> response = getAddBookToLibraryResponse(newBook);
         assertEquals(409, response.getStatusCode().value());
-        assertEquals("Book already exists", response.getBody());
+        assertEquals(CANNT_BE_ADDED_AS_BOOK_ALREADY_EXISTS, getErrorResponse(response.getBody()).getMessage());
     }
 
     @Test
@@ -125,6 +128,24 @@ class LMSApplicationTests {
         assertEquals(10, OBJECT_MAPPER.readValue(response.getBody(), BookDTO.class).getAvailableCopies());
     }
 
+    @Test
+    void testBorrowBookFromLibrary_forBookNotExistForISBN() throws JsonProcessingException {
+        ResponseEntity<String> response = restTemplate.exchange(
+                createURLWithPort("/api/library/borrow/UNKNOWN"), HttpMethod.PUT, null, String.class);
+
+        assertEquals(409, response.getStatusCode().value());
+        assertEquals(CANNT_BE_BORROWED_AS_THIS_BOOK_DOES_NOT_EXIST, getErrorResponse(response.getBody()).getMessage());
+    }
+
+    @Test
+    void testReturnBookFromLibrary_forBookNotExistForISBN() throws JsonProcessingException {
+        ResponseEntity<String> response = restTemplate.exchange(
+                createURLWithPort("/api/library/return/UNKNOWN"), HttpMethod.PUT, null, String.class);
+
+        assertEquals(409, response.getStatusCode().value());
+        assertEquals(CANNT_BE_RETURNED_AS_THIS_BOOK_DOES_NOT_EXIST, getErrorResponse(response.getBody()).getMessage());
+    }
+
     private void addBookToLibraryAndAssert(BookDTO book1) throws JsonProcessingException {
         ResponseEntity<String> response = getAddBookToLibraryResponse(book1);
 
@@ -139,6 +160,9 @@ class LMSApplicationTests {
         return response;
     }
 
+    private ErrorResponse getErrorResponse(String errorResponse) throws JsonProcessingException {
+        return OBJECT_MAPPER.readValue(errorResponse, ErrorResponse.class);
+    }
 
     private String createURLWithPort(String uri) {
         return "http://localhost:" + port + uri;
