@@ -10,8 +10,10 @@ import com.co4gsl.indentitye2e_lms.repositories.BookRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -25,37 +27,40 @@ import org.springframework.http.ResponseEntity;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.IntStream;
 
 import static com.co4gsl.indentitye2e_lms.controllers.BookController.CANNT_BE_ADDED_AS_BOOK_ALREADY_EXISTS;
 import static com.co4gsl.indentitye2e_lms.controllers.BookController.CANNT_BE_BORROWED_AS_THIS_BOOK_DOES_NOT_EXIST;
 import static com.co4gsl.indentitye2e_lms.controllers.BookController.CANNT_BE_RETURNED_AS_THIS_BOOK_DOES_NOT_EXIST;
+import static com.co4gsl.indentitye2e_lms.controllers.BookController.LIBRARY_API_DOES_NOT_PERMIT_FURTHER_CALLS;
 import static java.util.Optional.ofNullable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @SpringBootTest(classes = LMSApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class LMSApplicationTests {
 
-    private final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final HttpHeaders headers = new HttpHeaders();
     @Autowired
     BookController bookController;
     @Autowired
     CacheManager cacheManager;
-
     TestRestTemplate restTemplate = new TestRestTemplate();
-    HttpHeaders headers = new HttpHeaders();
-
     @LocalServerPort
     private int port;
     @Autowired
     private BookRepository bookRepository;
 
-    private String token;
+    @BeforeAll
+    void setupForAll() throws JsonProcessingException {
+        String token = signUpAndGetToken(new JwtRequest("admin@test.com", "123456"));
+        headers.set("Authorization", "Bearer " + token);
+    }
 
     @BeforeEach
-    public void setUp() throws JsonProcessingException {
-        token = signUpAndGetToken(new JwtRequest("admin@test.com", "123456"));
-        headers.set("Authorization", "Bearer " + token);
-
+    void setUp() {
         bookRepository.deleteAll();
         Objects.requireNonNull(cacheManager.getCache("bookCache")).clear();
     }
@@ -94,7 +99,7 @@ class LMSApplicationTests {
                 createURLWithPort("/api/library/author/" + author), HttpMethod.GET, entity, String.class);
 
         assertEquals(200, response.getStatusCode().value());
-        List<Book> responseBody = OBJECT_MAPPER.readValue(response.getBody(), new TypeReference<List<Book>>() {
+        List<Book> responseBody = OBJECT_MAPPER.readValue(response.getBody(), new TypeReference<>() {
         });
         assertEquals(2, responseBody.size());
     }
@@ -103,12 +108,23 @@ class LMSApplicationTests {
     void shouldGetNoBooks_forUnknownAuthor() throws JsonProcessingException {
         HttpEntity<JwtRequest> entity = new HttpEntity<>(null, headers);
         ResponseEntity<String> response = restTemplate.exchange(
-                createURLWithPort("/api/library/author/UNKOWN"), HttpMethod.GET, entity, String.class);
+                createURLWithPort("/api/library/author/UNKNOWN"), HttpMethod.GET, entity, String.class);
 
         assertEquals(200, response.getStatusCode().value());
-        List<Book> responseBody = OBJECT_MAPPER.readValue(response.getBody(), new TypeReference<List<Book>>() {
+        List<Book> responseBody = OBJECT_MAPPER.readValue(response.getBody(), new TypeReference<>() {
         });
         assertEquals(0, responseBody.size());
+    }
+
+    @Test
+    void shouldGetNoBooks_forRateLimiterReached() throws JsonProcessingException {
+        HttpEntity<JwtRequest> entity = new HttpEntity<>(null, headers);
+        AtomicReference<ResponseEntity<String>> response = new AtomicReference<>();
+        IntStream.range(0, 40).parallel().forEach($ -> response.set(restTemplate.exchange(
+                createURLWithPort("/api/library/author/UNKNOWN"), HttpMethod.GET, entity, String.class)));
+
+        assertEquals(429, response.get().getStatusCode().value());
+        assertEquals(LIBRARY_API_DOES_NOT_PERMIT_FURTHER_CALLS, getErrorResponse(response.get().getBody()).getMessage());
     }
 
     @Test
@@ -166,9 +182,8 @@ class LMSApplicationTests {
 
     private ResponseEntity<String> getAddBookToLibraryResponse(BookDTO book1) {
         HttpEntity<BookDTO> entity = new HttpEntity<>(book1, headers);
-        ResponseEntity<String> response = restTemplate.postForEntity(
+        return restTemplate.postForEntity(
                 createURLWithPort("/api/library/add"), entity, String.class);
-        return response;
     }
 
     private ErrorResponse getErrorResponse(String errorResponse) throws JsonProcessingException {

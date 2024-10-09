@@ -1,0 +1,16 @@
+server:
+  port: 9090
+spring:
+  application:
+    name: indentitye2e-lms
+token:
+  signing:
+    key: 413F4428472B4B6250655368566D5970337336763979244226452948404D6351
+resilience4j:
+  ratelimiter:
+    instances:
+      lms-api:
+        limit-for-period: 100
+        limit-refresh-period: 60s
+        timeout-duration: 10s
+        register-health-indicator: true
