@@ -1,11 +1,10 @@
 package com.co4gsl.indentitye2e_lms.exceptions;
 
+import com.co4gsl.indentitye2e_lms.exceptions.model.ErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-
-import java.util.NoSuchElementException;
 
 @ControllerAdvice
 public abstract class AppExceptionHandler {

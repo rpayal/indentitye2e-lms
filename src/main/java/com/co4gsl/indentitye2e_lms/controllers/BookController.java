@@ -25,6 +25,7 @@ public class BookController extends AppExceptionHandler {
     public static final String CANNT_BE_RETURNED_AS_THIS_BOOK_DOES_NOT_EXIST = "Can't be returned as this book does not exist.";
     public static final String CANNT_BE_BORROWED_AS_THIS_BOOK_DOES_NOT_EXIST = "Can't be borrowed as this book does not exist.";
     public static final String CANNT_BE_ADDED_AS_BOOK_ALREADY_EXISTS = "Can't be added as book already exists";
+
     private final BookService bookService;
 
     @Autowired

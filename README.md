@@ -1,1 +1,4 @@
-# TODO:  Implement authentication to the API using JWT tokens
+# Library Management System with RESTful API using Spring Boot
+
+# 
+

@@ -3,7 +3,9 @@ package com.co4gsl.indentitye2e_lms;
 import com.co4gsl.indentitye2e_lms.controllers.BookController;
 import com.co4gsl.indentitye2e_lms.domain.Book;
 import com.co4gsl.indentitye2e_lms.dto.BookDTO;
-import com.co4gsl.indentitye2e_lms.exceptions.ErrorResponse;
+import com.co4gsl.indentitye2e_lms.exceptions.model.ErrorResponse;
+import com.co4gsl.indentitye2e_lms.models.JwtRequest;
+import com.co4gsl.indentitye2e_lms.models.JwtResponse;
 import com.co4gsl.indentitye2e_lms.repositories.BookRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -47,8 +49,13 @@ class LMSApplicationTests {
     @Autowired
     private BookRepository bookRepository;
 
+    private String token;
+
     @BeforeEach
-    public void setUp() {
+    public void setUp() throws JsonProcessingException {
+        token = signUpAndGetToken(new JwtRequest("admin@test.com", "123456"));
+        headers.set("Authorization", "Bearer " + token);
+
         bookRepository.deleteAll();
         Objects.requireNonNull(cacheManager.getCache("bookCache")).clear();
     }
@@ -83,8 +90,8 @@ class LMSApplicationTests {
         addBookToLibraryAndAssert(book2);
         //
         HttpEntity<BookDTO> entity = new HttpEntity<>(book1, headers);
-        ResponseEntity<String> response = restTemplate.getForEntity(
-                createURLWithPort("/api/library/author/" + author), String.class);
+        ResponseEntity<String> response = restTemplate.exchange(
+                createURLWithPort("/api/library/author/" + author), HttpMethod.GET, entity, String.class);
 
         assertEquals(200, response.getStatusCode().value());
         List<Book> responseBody = OBJECT_MAPPER.readValue(response.getBody(), new TypeReference<List<Book>>() {
@@ -94,8 +101,9 @@ class LMSApplicationTests {
 
     @Test
     void shouldGetNoBooks_forUnknownAuthor() throws JsonProcessingException {
-        ResponseEntity<String> response = restTemplate.getForEntity(
-                createURLWithPort("/api/library/author/UNKOWN"), String.class);
+        HttpEntity<JwtRequest> entity = new HttpEntity<>(null, headers);
+        ResponseEntity<String> response = restTemplate.exchange(
+                createURLWithPort("/api/library/author/UNKOWN"), HttpMethod.GET, entity, String.class);
 
         assertEquals(200, response.getStatusCode().value());
         List<Book> responseBody = OBJECT_MAPPER.readValue(response.getBody(), new TypeReference<List<Book>>() {
@@ -111,27 +119,29 @@ class LMSApplicationTests {
         addBookToLibraryAndAssert(book);
 
         // borrow
+        HttpEntity<JwtRequest> entity = new HttpEntity<>(null, headers);
         ResponseEntity<String> response = restTemplate.exchange(
-                createURLWithPort("/api/library/borrow/" + isbn101), HttpMethod.PUT, null, String.class);
+                createURLWithPort("/api/library/borrow/" + isbn101), HttpMethod.PUT, entity, String.class);
         assertEquals(200, response.getStatusCode().value());
         assertEquals(9, getCachedBook(isbn101).get().getAvailableCopies());
 
-        response = restTemplate.getForEntity(
-                createURLWithPort("/api/library/isbn/" + isbn101), String.class);
+        response = restTemplate.exchange(
+                createURLWithPort("/api/library/isbn/" + isbn101), HttpMethod.GET, entity, String.class);
         assertEquals(200, response.getStatusCode().value());
         assertEquals(9, OBJECT_MAPPER.readValue(response.getBody(), BookDTO.class).getAvailableCopies());
 
         // return
         response = restTemplate.exchange(
-                createURLWithPort("/api/library/return/" + isbn101), HttpMethod.PUT, null, String.class);
+                createURLWithPort("/api/library/return/" + isbn101), HttpMethod.PUT, entity, String.class);
         assertEquals(200, response.getStatusCode().value());
         assertEquals(10, OBJECT_MAPPER.readValue(response.getBody(), BookDTO.class).getAvailableCopies());
     }
 
     @Test
     void testBorrowBookFromLibrary_forBookNotExistForISBN() throws JsonProcessingException {
+        HttpEntity<JwtRequest> entity = new HttpEntity<>(null, headers);
         ResponseEntity<String> response = restTemplate.exchange(
-                createURLWithPort("/api/library/borrow/UNKNOWN"), HttpMethod.PUT, null, String.class);
+                createURLWithPort("/api/library/borrow/UNKNOWN"), HttpMethod.PUT, entity, String.class);
 
         assertEquals(409, response.getStatusCode().value());
         assertEquals(CANNT_BE_BORROWED_AS_THIS_BOOK_DOES_NOT_EXIST, getErrorResponse(response.getBody()).getMessage());
@@ -139,8 +149,9 @@ class LMSApplicationTests {
 
     @Test
     void testReturnBookFromLibrary_forBookNotExistForISBN() throws JsonProcessingException {
+        HttpEntity<JwtRequest> entity = new HttpEntity<>(null, headers);
         ResponseEntity<String> response = restTemplate.exchange(
-                createURLWithPort("/api/library/return/UNKNOWN"), HttpMethod.PUT, null, String.class);
+                createURLWithPort("/api/library/return/UNKNOWN"), HttpMethod.PUT, entity, String.class);
 
         assertEquals(409, response.getStatusCode().value());
         assertEquals(CANNT_BE_RETURNED_AS_THIS_BOOK_DOES_NOT_EXIST, getErrorResponse(response.getBody()).getMessage());
@@ -170,5 +181,13 @@ class LMSApplicationTests {
 
     private Optional<BookDTO> getCachedBook(String isbn) {
         return ofNullable(cacheManager.getCache("bookCache")).map(c -> c.get(isbn, BookDTO.class));
+    }
+
+    private String signUpAndGetToken(JwtRequest request) throws JsonProcessingException {
+        HttpEntity<JwtRequest> entity = new HttpEntity<>(request, headers);
+        ResponseEntity<String> response = restTemplate.postForEntity(
+                createURLWithPort("/api/library/auth/signup"), entity, String.class);
+        assertEquals(200, response.getStatusCode().value());
+        return OBJECT_MAPPER.readValue(response.getBody(), JwtResponse.class).getToken();
     }
 }

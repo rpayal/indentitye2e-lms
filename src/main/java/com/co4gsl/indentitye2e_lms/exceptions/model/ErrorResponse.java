@@ -1,4 +1,4 @@
-package com.co4gsl.indentitye2e_lms.exceptions;
+package com.co4gsl.indentitye2e_lms.exceptions.model;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
